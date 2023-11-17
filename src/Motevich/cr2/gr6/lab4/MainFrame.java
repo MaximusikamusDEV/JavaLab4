@@ -3,31 +3,30 @@ package Motevich.cr2.gr6.lab4;
 import javax.swing.*;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
-import javax.tools.Tool;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.*;
 
 public class MainFrame extends JFrame {
 
-    private int WIDTH = 900;
-    private int HEIGHT = 800;
-
     boolean fileLoaded = false;
+    JFileChooser fileChooser = null;
 
     GraphicsDisplay display = new GraphicsDisplay();
 
     JFileChooser chooser = null;
 
-    private JCheckBoxMenuItem axisCheckItem;
-    private JCheckBoxMenuItem markersCheckItem;
-    private JCheckBoxMenuItem integralCheckItem;
-    private JCheckBoxMenuItem rotateCheckItem;
+    private final JCheckBoxMenuItem axisCheckItem;
+    private final JCheckBoxMenuItem markersCheckItem;
+    private final JCheckBoxMenuItem integralCheckItem;
+    private final JCheckBoxMenuItem rotateCheckItem;
 
     MainFrame(){
 
         Toolkit kit = Toolkit.getDefaultToolkit();
 
+        int WIDTH = 900;
+        int HEIGHT = 800;
         setLocation((kit.getScreenSize().width - WIDTH) / 2, (kit.getScreenSize().height - HEIGHT) / 2 - 20);
         setSize(WIDTH, HEIGHT);
 
@@ -103,13 +102,40 @@ public class MainFrame extends JFrame {
             }
         };
 
+
         rotateCheckItem = new JCheckBoxMenuItem(rotateAction);
         graphic.add(rotateCheckItem);
+
+
+        JMenuItem saveToFileItem = getjMenuItem();
+        file.add(saveToFileItem);
+
 
         graphic.addMenuListener(new GrMenuListener());
 
        getContentPane().add(display, BorderLayout.CENTER);
 
+    }
+
+    private JMenuItem getjMenuItem() {
+        Action saveToFileAction = new AbstractAction("Сохранить данные") {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                  if(fileChooser == null)
+                  {
+                      fileChooser = new JFileChooser();
+                      fileChooser.setCurrentDirectory(new File("."));
+                      fileChooser.setDialogTitle("Выбор директории");
+                  }
+
+                  if(fileChooser.showSaveDialog(MainFrame.this) == JFileChooser.APPROVE_OPTION)
+                  {
+                      saveToBinFile(fileChooser.getSelectedFile());
+                  }
+            }
+        };
+
+        return new JMenuItem(saveToFileAction);
     }
 
     protected void openGraph(File file) {
@@ -130,7 +156,7 @@ public class MainFrame extends JFrame {
                 i++;
             }
 
-            if (data != null && data.length > 0) {
+            if (data.length > 0) {
                 fileLoaded = true;
                 display.setGraphicsData(data);
             }
@@ -140,12 +166,10 @@ public class MainFrame extends JFrame {
             JOptionPane.showMessageDialog(MainFrame.this,
                     "Указанный файл не найден", "Ошибка загрузки данных",
                     JOptionPane.WARNING_MESSAGE);
-            return;
         } catch (IOException e) {
             JOptionPane.showMessageDialog(MainFrame.this, "Ошибка чтения координат точек",
                     "Ошибка чтения", JOptionPane.WARNING_MESSAGE);
 
-            return;
         }
     }
 
@@ -172,6 +196,22 @@ public class MainFrame extends JFrame {
     }
 
 
+    private void saveToBinFile(File outF)
+    {
+        try {
+            DataOutputStream out = new DataOutputStream(new FileOutputStream(outF));
 
+            for(Double[] list: display.getGraphicsData())
+            {
+                out.writeDouble(list[0]);
+                out.writeDouble(list[1]);
+            }
+
+            out.close();
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
 }

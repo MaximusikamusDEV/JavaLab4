@@ -2,14 +2,27 @@ package Motevich.cr2.gr6.lab4;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.awt.font.FontRenderContext;
 import java.awt.geom.*;
-import java.awt.image.renderable.RenderContext;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Vector;
+import java.util.Deque;
 
 public class GraphicsDisplay extends JPanel {
 
+
+
+    private final Double[] currSize = new Double[4];
+    private final Double[] firstGraphicsData = new Double[4];
+    private final Deque<Double[]> previousSizes = new ArrayDeque<>();
+
+    private boolean newSize;
+    private final Rectangle2D.Double choiceRect = new Rectangle2D.Double();
+
+    private double scaleY;
+    private double scaleX;
 
     private Double[][] graphicsData;
     private boolean showAxis = true;
@@ -24,11 +37,20 @@ public class GraphicsDisplay extends JPanel {
 
     private double scale;
 
-    private Font axisFont;
+    private final Font axisFont;
+    private final Font markerInfoFont;
 
-    private BasicStroke markerStroke;
-    private BasicStroke axisStroke;
-    private BasicStroke graphicStroke;
+    private final BasicStroke markerStroke;
+    private final BasicStroke axisStroke;
+    private final BasicStroke graphicStroke;
+
+    boolean flag = false;
+
+    private final BasicStroke sizeStroke;
+
+    private boolean pSelected;
+    private Point2D currPoint;
+    private boolean pDrug;
 
     public GraphicsDisplay()
     {
@@ -45,6 +67,18 @@ public class GraphicsDisplay extends JPanel {
 
         axisFont = new Font("Serif", Font.BOLD, 36);
 
+        markerInfoFont = new Font("Serif", Font.BOLD, 12);
+
+        sizeStroke = new BasicStroke(2.0f, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER, 10.0f,
+                new float[] {5, 2, 5}, 0.0f);
+
+        addMouseMotionListener(new MouseMotionListener());
+        addMouseListener(new MouseStatListener());
+
+    }
+
+    public Double[][] getGraphicsData() {
+      return graphicsData;
     }
 
     public void setGraphicsData(Double[][] graphicsData)
@@ -81,7 +115,10 @@ public class GraphicsDisplay extends JPanel {
 
     protected Point2D.Double xyToPoint(double x, double y)
     {
-        return new Point2D.Double((x - minX) * scale, (maxY - y) * scale);
+        if(!flag)
+        return new Point2D.Double((x - currSize[1]) * scale, (currSize[2] - y) * scale);
+        else
+            return new Point2D.Double((x - currSize[1]) * scaleX, (currSize[2] - y) * scaleY);
     }
 
     protected Point2D.Double shiftPoint(Point2D.Double src, double delX, double delY)
@@ -97,68 +134,101 @@ public class GraphicsDisplay extends JPanel {
         canvas.setStroke(graphicStroke);
         canvas.setColor(Color.BLUE);
 
-        //Double lastP = 0.0;
-
         GeneralPath graph = new GeneralPath();
 
-        for(int i = 0; i < graphicsData.length; i++)
-        {
-            boolean fl = false;
-            Point2D.Double point = xyToPoint(graphicsData[i][0], graphicsData[i][1]);
+        int k = 0;
 
-            String str = graphicsData[i][1].toString();
+        for (Double[] graphicsDatum : graphicsData) {
+            boolean fl = false;
+            Point2D.Double point = xyToPoint(graphicsDatum[0], graphicsDatum[1]);
+
+            String str = graphicsDatum[1].toString();
             str = str.replace(".", "");
             str = str.replace("-", "");
 
             char[] st = str.toCharArray();
 
 
-            if(st.length == 1)
-                fl = false;
+            if (st.length == 1) {
+            }
             else {
-                for (int j = 1; j < st.length-1; j++) {
+                for (int j = 1; j < st.length - 1; j++) {
 
-                    if (st[j] <= st[j-1]) {
+                    if (st[j] <= st[j - 1]) {
                         fl = true;
                         break;
                     }
                 }
             }
 
+            if ((!rotateGraph && graphicsDatum[0] <= currSize[0] && graphicsDatum[0] >= currSize[1]
+                    && graphicsDatum[1] <= currSize[2]
+                    && graphicsDatum[1] >= currSize[3]) || (rotateGraph && graphicsDatum[1] <= currSize[0]
+                    && graphicsDatum[1] >= currSize[1] && graphicsDatum[0] <= currSize[2]
+                    && graphicsDatum[0] >= currSize[3])) {
 
-            if(i > 0)
-            {
-                graph.lineTo(point.getX(), point.getY());
-            } else
-                graph.moveTo(point.getX(), point.getY());
 
-            if(fl == false)
-            {
-                Ellipse2D.Double el = new Ellipse2D.Double();
-                Point2D.Double corn = shiftPoint(point, 5, 5);
-                el.setFrameFromCenter(point, corn);
-                Color cl = canvas.getColor();
-                Stroke newS = canvas.getStroke();
-                canvas.setStroke(oldS);
-                canvas.setColor(Color.YELLOW);
-                canvas.draw(el);
-                canvas.fill(el);
-                canvas.setColor(cl);
-                canvas.setStroke(newS);
-              //  System.out.println("+");
+
+                if (k > 0) {
+                    graph.lineTo(point.getX(), point.getY());
+
+                } else {
+                    graph.moveTo(point.getX(), point.getY());
+                }
+                if (!fl) {
+                    Ellipse2D.Double el = new Ellipse2D.Double();
+                    Point2D.Double corn = shiftPoint(point, 5, 5);
+                    el.setFrameFromCenter(point, corn);
+                    Color cl = canvas.getColor();
+                    Stroke newS = canvas.getStroke();
+                    canvas.setStroke(oldS);
+                    canvas.setColor(Color.YELLOW);
+                    canvas.draw(el);
+                    canvas.fill(el);
+                    canvas.setColor(cl);
+                    canvas.setStroke(newS);
+
+                }
+
+                if (pSelected && point.equals(currPoint)) {
+                    Ellipse2D.Double el = new Ellipse2D.Double();
+                    Point2D.Double corn = shiftPoint(point, 7, 7);
+                    el.setFrameFromCenter(point, corn);
+                    Color cl = canvas.getColor();
+                    Stroke newS = canvas.getStroke();
+                    Font newF = canvas.getFont();
+                    canvas.setStroke(oldS);
+                    canvas.setColor(Color.BLACK);
+                    canvas.setFont(markerInfoFont);
+                    canvas.draw(el);
+                    canvas.fill(el);
+
+                    String strX = Double.toString(graphicsDatum[0]);
+                    String strY = Double.toString(graphicsDatum[1]);
+                    String strXY = "X: " + strX + " Y: " + strY;
+                    canvas.drawString(strXY, (float) (point.getX() + 10), (float) point.getY());
+
+                    canvas.setFont(newF);
+                    canvas.setColor(cl);
+                    canvas.setStroke(newS);
+                }
+
+                k++;
             }
+
 
         }
 
-        canvas.draw(graph);
 
+
+        canvas.draw(graph);
     }
 
     protected void paintAxis(Graphics2D canvas)
     {
        canvas.setStroke(axisStroke);
-       canvas.setColor(Color.BLACK);
-       canvas.setPaint(Color.GREEN);
+        canvas.setColor(Color.BLACK);
+        canvas.setPaint(Color.GREEN);
        canvas.setFont(axisFont);
 
        FontRenderContext context = canvas.getFontRenderContext();
@@ -168,11 +238,10 @@ public class GraphicsDisplay extends JPanel {
            GeneralPath arrow;
            if(!rotateGraph) {
                canvas.draw(new Line2D.Double(xyToPoint(0, maxY), xyToPoint(0, minY)));
-              arrow = new GeneralPath();
            } else {
                canvas.draw(new Line2D.Double(xyToPoint(0, maxX), xyToPoint(0, minX)));
-              arrow = new GeneralPath();
            }
+           arrow = new GeneralPath();
 
            Point2D.Double lineEnd;
 
@@ -208,11 +277,10 @@ public class GraphicsDisplay extends JPanel {
            GeneralPath arrowx;
            if(!rotateGraph) {
                canvas.draw(new Line2D.Double(xyToPoint(maxX, 0), xyToPoint(minX, 0)));
-                arrowx = new GeneralPath();
            } else {
                canvas.draw(new Line2D.Double(xyToPoint(maxY, 0), xyToPoint(minY, 0)));
-                arrowx = new GeneralPath();
            }
+           arrowx = new GeneralPath();
 
            Point2D.Double lineEnd;
 
@@ -250,32 +318,36 @@ public class GraphicsDisplay extends JPanel {
 
         for(Double[] graph: graphicsData)
         {
+
             Point2D.Double center = xyToPoint(graph[0], graph[1]);
 
-            Point2D.Double diagl1 = shiftPoint(center, 5, 5);
-            Point2D.Double diagl0 = shiftPoint(center, -5, -5);
-            Line2D.Double diagl;
-            diagl = new Line2D.Double(diagl0, diagl1);
+                Point2D.Double diagl1 = shiftPoint(center, 5, 5);
+                Point2D.Double diagl0 = shiftPoint(center, -5, -5);
+                Line2D.Double diagl;
+                diagl = new Line2D.Double(diagl0, diagl1);
 
-            Point2D.Double diagr1 = shiftPoint(center, -5, 5);
-            Point2D.Double diagr0 = shiftPoint(center, 5, -5);
-            Line2D.Double diagr;
-            diagr = new Line2D.Double(diagr0, diagr1);
+                Point2D.Double diagr1 = shiftPoint(center, -5, 5);
+                Point2D.Double diagr0 = shiftPoint(center, 5, -5);
+                Line2D.Double diagr;
+                diagr = new Line2D.Double(diagr0, diagr1);
 
-            Point2D.Double vert1 = shiftPoint(center, 0, 5);
-            Point2D.Double vert0 = shiftPoint(center, 0, -5);
-            Line2D.Double vert;
-            vert = new Line2D.Double(vert0, vert1);
+                Point2D.Double vert1 = shiftPoint(center, 0, 5);
+                Point2D.Double vert0 = shiftPoint(center, 0, -5);
+                Line2D.Double vert;
+                vert = new Line2D.Double(vert0, vert1);
 
-            Point2D.Double hor1 = shiftPoint(center, 5, 0);
-            Point2D.Double hor0 = shiftPoint(center, -5, 0);
-            Line2D.Double hor;
-            hor = new Line2D.Double(hor0, hor1);
+                Point2D.Double hor1 = shiftPoint(center, 5, 0);
+                Point2D.Double hor0 = shiftPoint(center, -5, 0);
+                Line2D.Double hor;
+                hor = new Line2D.Double(hor0, hor1);
 
-            canvas.draw(diagl);
-            canvas.draw(vert);
-            canvas.draw(hor);
-            canvas.draw(diagr);
+
+                if(graph[0] <= currSize[0] && graph[0] >= currSize[1] && graph[1] <= currSize[2] && graph[1] >= currSize[3]) {
+                    canvas.draw(diagl);
+                    canvas.draw(vert);
+                    canvas.draw(hor);
+                    canvas.draw(diagr);
+                }
         }
     }
 
@@ -288,20 +360,24 @@ public class GraphicsDisplay extends JPanel {
         if(graphicsData == null)
             return;
 
+    if(!flag) {
         minX = graphicsData[0][0];
-        maxX = graphicsData[graphicsData.length-1][0];
+        maxX = graphicsData[graphicsData.length - 1][0];
         maxY = minY = graphicsData[0][1];
 
-        for(Double[] graph: graphicsData)
-        {
-            if(graph[1] < minY)
+        for (Double[] graph : graphicsData) {
+            if (graph[1] < minY)
                 minY = graph[1];
 
-            if(graph[1] > maxY)
+            if (graph[1] > maxY)
                 maxY = graph[1];
         }
 
-        if(rotateGraph) {
+
+        addCurrSize(maxX, minX, maxY, minY);
+
+
+        if (rotateGraph) {
             double tmp = maxX;
             maxX = maxY;
             maxY = tmp;
@@ -310,25 +386,37 @@ public class GraphicsDisplay extends JPanel {
             minX = minY;
             minY = tmp;
         }
+        addCurrSize(maxX, minX, maxY, minY);
 
+        firstGraphicsData[0] = maxX;
+        firstGraphicsData[1] = minX;
+        firstGraphicsData[2] = maxY;
+        firstGraphicsData[3] = minY;
 
-            double scaleX = getSize().getWidth()  / (maxX - minX);
-            double scaleY = getSize().getHeight() / (maxY - minY);
+         scaleX = getSize().getWidth() / (currSize[0] - currSize[1]);
+         scaleY = getSize().getHeight() / (currSize[2] - currSize[3]);
 
-            scale = Math.min(scaleX, scaleY);
+        scale = Math.min(scaleX, scaleY);
 
-            if (scale == scaleX) {
-                double incY = (getSize().getHeight() / scale - (maxY - minY)) / 2;
-                maxY += incY;
-                minY -= incY;
-            }
+        if (scale == scaleX) {
+            double incY = (getSize().getHeight() / scale - (maxY - minY)) / 2;
+            maxY += incY;
+            minY -= incY;
+        }
 
-            if (scale == scaleY) {
-                double incX = (getSize().getWidth() / scale - (maxX - minX)) / 2;
-                maxX += incX;
-                minX -= incX;
-            }
+        if (scale == scaleY) {
+            double incX = (getSize().getWidth() / scale - (maxX - minX)) / 2;
+            maxX += incX;
+            minX -= incX;
+        }
 
+        addCurrSize(maxX, minX, maxY, minY);
+    }
+
+         scaleX = getSize().getWidth() / (currSize[0] - currSize[1]);
+         scaleY = getSize().getHeight() / (currSize[2] - currSize[3]);
+
+        //addCurrSize(maxX, minX, maxY, minY);
         Graphics2D canvas = (Graphics2D) g;
 
         Stroke oldS = canvas.getStroke();
@@ -355,6 +443,18 @@ public class GraphicsDisplay extends JPanel {
         canvas.setPaint(oldP);
         canvas.setColor(oldC);
         canvas.setStroke(oldS);
+        if(newSize)
+            showChoiceRect(canvas);
+
+    }
+
+
+    void showChoiceRect(Graphics2D canvas)
+    {
+          Stroke oldS = canvas.getStroke();
+          canvas.setStroke(sizeStroke);
+          canvas.draw(choiceRect);
+          canvas.setStroke(oldS);
     }
 
     void rotatingGraph(Graphics2D canvas)
@@ -393,20 +493,16 @@ public class GraphicsDisplay extends JPanel {
         ArrayList<ArrayList<Double>> listOfPoints = new ArrayList<>();
         ArrayList<Double> currList = null;
 
-        if(graphicsData[0][1] < 0.0) {flagIn = false;
-            fl = false;
+        if(graphicsData[0][1] < 0.0) {
+
         }
         else if(graphicsData[0][1] > 0.0){
             flagIn = true;
             fl = true;
-        } else if(graphicsData[0][1] == 0.0)
-        {
+        } else {
             currList = new ArrayList<>();
             currList.add(graphicsData[0][0]);
             currList.add(graphicsData[0][1]);
-            flagIn = false;
-            fl = false;
-            mem = 0;
             flagOut = true;
         }
 
@@ -446,10 +542,7 @@ public class GraphicsDisplay extends JPanel {
                 }
 
 
-                if(fl)
-                    fl = false;
-                else
-                    fl = true;
+                fl = !fl;
 
                 listOfPoints.add(currList);
                 currList = new ArrayList<>();
@@ -489,9 +582,6 @@ public class GraphicsDisplay extends JPanel {
             fig.lineTo(point.getX(), point.getY());
 
 
-
-           // System.out.println(bd.getX() + " " + bd.getY() + " " + bounds.getX() + " " + bounds.getY());
-
             if(integral.length() > 6)
             integral = integral.substring(0, 6);
 
@@ -499,19 +589,14 @@ public class GraphicsDisplay extends JPanel {
                 continue;
 
 
-            int k = 1;
-            int z = 1;
-
             if(list.get(0) < 0)
-                k = -1;
-
-            Rectangle2D ptFig = fig.getBounds2D();
+                ;
 
             Double[] center = figCenter(list);
 
             double textX = center[0];
             double textY = center[1];
-           // Point2D ptFig = fig.ge;
+
 
             Point2D.Double pointText = xyToPoint(textX,
                     textY);
@@ -570,62 +655,45 @@ public class GraphicsDisplay extends JPanel {
     double calcIntegral(ArrayList<Double> list)
     {
         double y1 = 0.0, x1 = 0.0;
-        double y2 = 0.0, x2 = 0.0;
+        double y2, x2;
         double totalF = 0;
-        boolean fl = false;
 
 
         for(int i = 0; i < list.size(); i += 2)
         {
-            double prevF = 0.0;
-            double  currF = 0.0;
-            if(i % 4 != 0 && !fl)
+            double  currF;
+            x2 = list.get(i);
+            y2 = list.get(i+1);
+
+            double h = (x2 - x1) / 100;
+            Double[] kb = kAndB(x1, y1, x2, y2);
+
+            while(true)
             {
-                x1 = list.get(i);
-                y1 = list.get(i+1);
-            } else
-            {
-                prevF = currF;
+                int n = (int) ((x2 - x1) / h);
 
-                x2 = list.get(i);
-                y2 = list.get(i+1);
 
-                double eps = 1e-03;
-                double h = (x2 - x1) / 100;
-                Double[] kb = kAndB(x1, y1, x2, y2);
+                currF = (kb[0] * (x1 + h * 1) + kb[1]);
+                currF += (kb[0] * (x1 + h * n) + kb[1]);
 
-                while(true)
+                for(int j = 1; j < n - 1; j++)
                 {
-                    int n = (int) ((x2 - x1) / h);
-
-                    prevF = currF;
-
-
-                    currF = (kb[0] * (x1 + h * 1) + kb[1]);
-                    currF += (kb[0] * (x1 + h * n) + kb[1]);
-
-                    for(int j = 1; j < n - 1; j++)
-                    {
-                        currF += 2 * (kb[0] * (x1 + h * j) + kb[1]);
-                        currF *= 1000;
-                        Math.ceil(currF);
-                        currF /= 1000;
-                    }
-
-                    currF /= 2;
-                    currF *= h;
-
-                        break;
+                    currF += 2 * (kb[0] * (x1 + h * j) + kb[1]);
+                    currF *= 1000;
+                    Math.ceil(currF);
+                    currF /= 1000;
                 }
 
+                currF /= 2;
+                currF *= h;
 
-
-                fl = true;
-                 x1 = x2;
-                 y1 = y2;
-                 totalF += currF;
-               // System.out.println("  - "+ currF + " " + totalF);
+                    break;
             }
+
+
+            x1 = x2;
+            y1 = y2;
+            totalF += currF;
         }
 
 
@@ -664,9 +732,7 @@ public class GraphicsDisplay extends JPanel {
     private Double[] figCenter(ArrayList<Double> list)
     {
         Double[] center = new Double[2];
-        double x = 0;
         double y = 0;
-        boolean fl = false;
 
         for(int i = 0; i < list.size(); i += 2)
         {
@@ -676,23 +742,248 @@ public class GraphicsDisplay extends JPanel {
             y += list.get(i+1);
         }
 
-        //center[0] = x / list.size() * 2;
-      //  System.out.println(center[0]);
         int k = 1;
         if(list.get(list.size()-2) >= 0)
             k = -1;
-        center[0] = (list.get(0) + list.get(list.size()-2)) / 2 - k * 1;
+        center[0] = (list.get(0) + list.get(list.size()-2)) / 2 - k;
         center[1] = y / list.size() * 2;
 
-
-
-        //center[1] = y / list.size() * 2;
-       // System.out.println(center[1]);
 
         return center;
     }
 
+    private void addPrevSizes(double xMax, double xMin, double yMax, double yMin)
+    {
+        Double[] arr = new Double[4];
+        arr[0] = xMax;
+        arr[1] = xMin;
+        arr[2] = yMax;
+        arr[3] = yMin;
+        if(previousSizes != null)
+        previousSizes.addLast(arr);
+        else
+            previousSizes.add(arr);
+    }
 
+    private void addCurrSize(double xMax, double xMin, double yMax, double yMin)
+    {
+       // currSize = new Double[4];
+        currSize[0] = xMax;
+        currSize[1] = xMin;
+        currSize[2] = yMax;
+        currSize[3] = yMin;
+        repaint();
+    }
+
+
+    private Double[] getPrevSize()
+    {
+        return previousSizes.pollLast();
+    }
+
+    private class MouseStatListener implements MouseListener {
+
+
+        @Override
+        public void mouseClicked(MouseEvent e) {
+
+            if(e.getButton() == 3)
+            {
+                Double[] size = getPrevSize();
+                addCurrSize(size[0], size[1], size[2], size[3]);
+            }
+
+        }
+
+        @Override
+        public void mousePressed(MouseEvent e) {
+
+            if(e.getButton() == 1) {
+                Double[] currP = pointToXY(e.getX(), e.getY());
+
+
+                if(!pSelected && findPointToDrag(currP[0], currP[1]) == -1)
+                {
+                    //System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                    newSize = true;
+                    setCursor(Cursor.getPredefinedCursor(Cursor.SE_RESIZE_CURSOR));
+                    choiceRect.setFrame(e.getX(), e.getY(), 5, 5);
+                  //  setCursor(Cursor.getPredefinedCursor(5));
+                }
+            }
+
+        }
+
+        @Override
+        public void mouseReleased(MouseEvent e) {
+
+            if(e.getButton() == 1)
+            {
+                setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+
+                if(pSelected)
+                {
+                    pSelected = false;
+                } else
+                    if(newSize) {
+                        newSize =  false;
+                        addPrevSizes(currSize[0], currSize[1], currSize[2], currSize[3]);
+
+                        Double[] pp = pointToXY(choiceRect.getX(), choiceRect.getY());
+                        Double[] ppp = pointToXY(choiceRect.getX()+choiceRect.getWidth(), choiceRect.getY()+choiceRect.getHeight());
+                      //  System.out.println(pp[0] + "  " + pp[1] + " " + ppp[0] + " " + ppp[1]);
+
+
+                        currSize[0] = 0.0;
+                        addCurrSize(ppp[0], pp[0], pp[1], ppp[1]);
+                        //System.out.println(currSize[0] + " " + currSize[1] + " " + currSize[2] + " " + currSize[3]);
+
+                        flag = true;
+                        repaint();
+                    }
+               // System.out.println("!!!!!!!!!!");
+            }
+
+        }
+
+        @Override
+        public void mouseEntered(MouseEvent e) {
+
+        }
+
+        @Override
+        public void mouseExited(MouseEvent e) {
+
+        }
+
+
+    }
+
+    private class MouseMotionListener implements java.awt.event.MouseMotionListener{
+
+        @Override
+        public void mouseDragged(MouseEvent e) {
+            if(pSelected) {
+                pDrug = true;
+                //pSelected = true;
+                double currCurY = e.getY();
+                double currCurX = e.getX();
+
+                int i = findPointToDrag(currCurX, currCurY);
+                Double[] xyMouse = pointToXY(currCurX, currCurY);
+                if(i != -1) {
+                    graphicsData[i][1] = xyMouse[1];
+                    currPoint = xyToPoint(graphicsData[i][0], graphicsData[i][1]);
+                    repaint();
+                }
+
+                repaint();
+            }
+            else {
+
+                if(newSize)
+                {
+                    double width = e.getX() - choiceRect.getX();
+                    double height = e.getY() - choiceRect.getY();
+
+                    if(width < 5.0)
+                        width = 5.0;
+
+                    if(height < 5.0)
+                        height = 5.0;
+
+
+
+                    choiceRect.setFrame(choiceRect.getX(), choiceRect.getY(), width, height);
+                    repaint();
+                }
+
+                pDrug = false;
+
+                repaint();
+            }
+
+        }
+
+        public void mouseMoved(MouseEvent e) {
+            double x = e.getX();
+            double y = e.getY();
+            currPoint = findPoint(x, y);
+
+            if(pSelected) {
+                setCursor(Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR));
+            } else
+                setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+
+            GraphicsDisplay.this.repaint();
+        }
+
+
+
+    }
+
+    private Point2D findPoint(double x, double y)
+    {
+        if(graphicsData == null) {
+            pSelected = false;
+            return null;
+        }
+
+        //pSelected = true;
+
+        for(Double[] list: graphicsData)
+        {
+            Point2D p = xyToPoint(list[0], list[1]);
+
+            if(Math.sqrt((p.getX() - x) * (p.getX() - x) + (p.getY() - y) * (p.getY() - y)) < 10)
+            {
+                pSelected = true;
+                repaint();
+                return p;
+            }
+            else
+            if(!pDrug) {
+            }
+
+            pSelected = false;
+        }
+
+        return null;
+    }
+
+    private int findPointToDrag(double x, double y)
+    {
+        if(graphicsData == null) {
+            pSelected = false;
+            return -1;
+        }
+
+        int i = 0;
+
+        for(Double[] list: graphicsData)
+        {
+            Point2D p = xyToPoint(list[0], list[1]);
+
+            if(Math.sqrt((p.getX() - x) * (p.getX() - x) + (p.getY() - y) * (p.getY() - y)) < 10)
+            {
+                pSelected = true;
+                return i;
+            }
+            else
+                pSelected = false;
+            i++;
+        }
+
+        return -1;
+    }
+
+    private Double[] pointToXY(double x, double y)
+    {
+        Double[] newdoub = new Double[2];
+        newdoub[0] = currSize[1] + x / scaleX;
+        newdoub[1] =  currSize[2] - y / scaleY;
+        return newdoub;
+    }
 
 }
 
